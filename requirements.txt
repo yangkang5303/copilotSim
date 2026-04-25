@@ -1,0 +1,6 @@
+openai
+SpeechRecognition
+pyaudio
+keyboard
+python-dotenv
+pygame
