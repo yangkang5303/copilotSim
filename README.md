@@ -1,103 +1,19 @@
-# 飞行模拟器 AI 副驾驶 (X-Plane & MSFS)
+# AI Flight Copilot ✈️ (飞行模拟器 AI 副驾驶)
 
-本文档概述了基于 AI 的虚拟副驾驶的架构和实施计划，旨在为 X-Plane 和 Microsoft Flight Simulator (MSFS) 用户提供辅助。该副驾驶将读取实时遥测数据、理解飞行上下文，并通过语音进行交互。
+**AI Flight Copilot** is an intelligent, voice-interactive virtual copilot designed for flight simulators (currently supporting **X-Plane 11/12**). Powered by advanced Large Language Models (LLMs) like OpenAI GPT-4o and Whisper, it reads real-time aircraft telemetry (altitude, speed, heading, pitch, roll) and acts as your professional aviation companion. You can talk to it naturally via a push-to-talk interface, ask for flight data, or request situational advice, and it will respond intelligently with synthesized voice.
 
-## 需要用户审核
+**AI Flight Copilot (飞行模拟器 AI 副驾驶)** 是一款专为飞行模拟游戏（目前支持 **X-Plane 11/12**）设计的智能语音交互虚拟副驾驶。它由强大的大型语言模型（如 OpenAI GPT-4o 和 Whisper）驱动，能够实时读取飞机的遥测数据（高度、速度、航向、俯仰角、滚转角），并作为您的专业飞行伴侣。您可以通过“一键发言 (Push-to-Talk)”界面自然地与它对话，询问飞行数据或寻求情景建议，它将结合当前飞行状态给出专业的回答，并通过语音播报给您。
 
-> [!IMPORTANT]
-> **AI 模型与 API 的选择：** 最关键的决定是使用哪家 AI 供应商。
-> 为了实现逼真、快速的对话能力并对飞行数据进行强大的逻辑推理，我建议使用基于云端的 LLM（如 **OpenAI GPT-4o** 或 **Google Gemini 1.5 Pro**）。
-> 对于语音功能，使用云端 API 如 **OpenAI Whisper**（语音转文字）和 **OpenAI TTS** 或 **ElevenLabs**（文字转语音）能提供最佳的沉浸感。不过，也有免费或本地的替代方案（例如 `edge-tts`、Google 免费层的 `SpeechRecognition` 等）。
-> *您是否同意使用付费的云端 API（需要提供 API 密钥），还是说您严格要求使用 100% 免费/本地的解决方案？*
+## Features (功能特点)
+- **Real-time Telemetry (实时数据读取)**: Uses XPlaneConnect to read live aircraft data.
+- **Voice Interaction (语音交互)**: Push-to-Talk (Spacebar) to record your voice.
+- **Speech-to-Text (语音识别)**: Highly accurate transcription via Whisper API.
+- **Context-Aware AI (上下文感知 AI)**: Injects flight telemetry into the GPT prompt for accurate aviation responses.
+- **Text-to-Speech (语音合成)**: Natural sounding copilot voice responses.
 
-> [!IMPORTANT]
-> **模拟器优先级：**
-> 首先支持 **X-Plane**
-
-## 架构方案
-
-该应用程序将使用 **Python** 构建，采用事件驱动或多线程架构来处理实时数据轮询、音频处理和网络请求，以避免阻塞主线程。
-
-### 1. 模拟器接口模块
-我们将创建一个统一的 `Simulator` 抽象基类，并提供两种实现：
-- **MSFS 连接器：** 使用 `SimConnect` Python 库读取变量，如标题（飞机机型）、GPS 目的地、指示高度、空速、航向和自动驾驶状态。
-- **X-Plane 连接器：** 使用 `XPlaneConnect` (XPC) 或原生 UDP 套接字来读取 DataRefs（例如 `sim/flightmodel/position/...`）。
-
-### 2. 上下文管理器与 AI 引擎
-- **状态追踪：** 维护飞行状态滚动记忆的模块（当前飞行阶段、高度、速度、目的地、机型）。
-- **LLM 集成：** 当触发对话时，系统会构建一个提示词 (Prompt)，将当前的飞行遥测数据和最近的对话历史记录注入其中，指示 LLM 扮演专业的副驾驶。
-- **主动代理：** 一个后台循环，偶尔将当前状态发送给 LLM，以评估是否需要进行标准的喊话或建议（例如：“接近 10,000 英尺，请记住关闭着陆灯”）。
-
-### 3. 语音交互接口
-- **语音转文字 (STT)：** 监听麦克风输入（通过一键发言快捷键或带有语音活动检测的连续监听）。
-- **文字转语音 (TTS)：** 播放 AI 的文字回复。
-
-## 拟议的更改
-
-### [核心框架]
-
-#### [NEW] `main.py`
-入口点，初始化模拟器连接、语音模块和主事件循环。
-
-#### [NEW] `simulator_connectors.py`
-包含 MSFS 的 `SimConnect` 逻辑和 X-Plane 的 `UDP DataRef` 逻辑。
-
-#### [NEW] `ai_copilot.py`
-管理 LLM API 调用、提示词工程（人设定义）和上下文注入。
-
-#### [NEW] `voice_module.py`
-处理麦克风录音、语音转文字以及文字转语音播放。
-
-#### [NEW] `requirements.txt`
-项目依赖，例如 `SimConnect`、`xplaneConnect`、`openai` / `google-generativeai`、`SpeechRecognition`、`pyaudio`、`keyboard`（用于一键发言）等。
-
-## 验证计划
-
-### 手动验证
-1. **遥测测试：** 在运行模拟器（MSFS 或 X-Plane）的同时运行脚本，验证其能在控制台准确打印当前飞机机型、高度、速度和目的地。
-2. **语音测试：** 对着麦克风说话，验证 STT 能正确将语音转录为文字。
-3. **集成测试：** 询问副驾驶“我们当前的高度和航向是多少？”，验证其能通过音频回复从模拟器提取的正确数据。
-4. **主动提醒测试：** 模拟穿过过渡高度，验证副驾驶会自动提供相应的建议。
-
-
-
-
-这是一个非常核心的问题。针对您的三个问题，我为您详细解答：
-
-### 1. `xpc` 能识别飞机的哪些数据？
-**X-Plane Connect (xpc)** 实际上可以读取 X-Plane 内部的**几乎所有数据**（这些数据在游戏中被称为 **DataRefs**，有成千上万个）。
-在目前我为您编写的 `simulator_connectors.py` 代码中，我们默认抓取了以下核心数据：
-- **位置与姿态**：经度、纬度、高度（英尺）、俯仰角 (Pitch)、滚转角 (Roll)、真实航向 (Heading)。
-- **速度**：指示空速 (KIAS)、地速 (Groundspeed)。
-- **机型信息**：当前飞机的描述字符串。
-
-只要您需要，我们随时可以通过添加代码来读取更多高级数据，例如：**起落架状态、襟翼角度、引擎转速 (RPM)、剩余油量、自动驾驶仪状态（是否开启了 LNAV/VNAV）、风速风向、甚至是 ILS 盲降的下滑道偏差等。**
-
-### 2. 这些数据是否会作为提示词发给AI？
-**是的，完全会。** 
-在目前的 `ai_copilot.py` 逻辑中，采用的是**“即时注入”**机制：
-每当您按住空格键说话并松开时，程序会在把您的语音发送给 AI 之前，**瞬间去拉取一次当前模拟器最新的仪表数据**，并将其打包成一段系统级别的提示词（Prompt）放在您的对话前面。
-比如发送给 AI 的真实数据包看起来是这样的：
-> `[系统上下文]：当前飞机遥测数据：高度 15000 英尺，航向 270，速度 250 节，姿态：平飞...`
-> `[人类机长]：副驾驶，帮我查一下如果我们现在开始下降，需要多大的下降率？`
-
-这样 AI 就能结合当前的飞行高度和速度，给出极其精准、符合当前情境的专业回答，而不是泛泛而谈。
-
-### 3. 这其中的延迟如何解决？
-目前使用全链路 API 的架构（录音 -> STT(转文字) -> LLM(思考) -> TTS(转语音) -> 播放）确实会带来大约 **3 到 5 秒**的延迟。在模拟飞行中，这个延迟可能会让人感觉不够“实时”。
-
-要解决和优化这个延迟，有以下几个非常成熟的方案，我们后续可以逐步升级：
-
-1. **启用流式输出 (Streaming) [推荐]**
-   - **文字流**：目前代码是等 GPT-4o 把整句话想完了才输出。我们可以改成流式（Stream）输出，让 AI 像打字机一样一个字一个字吐出来。
-   - **音频流**：配合文字流，只要 AI 吐出前几个词（比如一小半句话），我们就立刻发送给 TTS 转成音频并开始播放，边播边生成后面的音频。**这能把等待时间压缩到 1 秒以内**。
-
-2. **使用速度更快的大模型**
-   - 将 `gpt-4o` 替换为 `gpt-4o-mini`。在处理日常飞行指令时，mini 版本的智商完全足够，但生成速度会快数倍，极大地降低思考延迟。
-
-3. **本地化语音处理 (吃电脑配置)**
-   - **本地转文字**：如果您的电脑有独立显卡，可以把 OpenAI Whisper 替换为本地部署的 `faster-whisper`。这免去了上传录音到云端的网络延迟。
-   - **本地语音合成**：使用 `edge-tts`（微软边缘浏览器的免费语音，速度极快且免费）或者本地的语音合成模型，省去下载音频的时间。
-
-4. **VAD 语音活动检测 (抛弃按键)**
-   - 目前需要按住空格键。未来可以升级为“一直监听”，当检测到您停止说话超过 0.8 秒时，瞬间自动触发发送，这会让对话感觉更流畅、更自然，就像用真实耳麦一样。
+## Quick Start (快速开始)
+1. Install [NASA XPlaneConnect Plugin](https://github.com/nasa/XPlaneConnect/releases) in your X-Plane `Resources/plugins` folder.
+2. Rename `.env.example` to `.env` and add your `OPENAI_API_KEY`. (将 `.env` 文件中的 API Key 替换为您自己的)。
+3. Install Python dependencies: `pip install -r requirements.txt`.
+4. Run the copilot: `python main.py`.
+5. Hold **Space** to talk to your copilot! (按住空格键开始对话！)
